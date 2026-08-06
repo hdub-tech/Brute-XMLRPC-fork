@@ -38,15 +38,11 @@
 
 ## Requirements
 - Python 3.x
-- Required Python packages:
-  - `requests`
-  - `colorama`
-  - `termcolor`
-  - `concurrent.futures`
+- Required Python packages are in [requirements.txt]
 
 You can install the required packages using the following command:
 ```bash
-pip install requests colorama termcolor
+pip install -r requirements.txt
 ```
 
 ## Installation
@@ -74,3 +70,6 @@ pip install requests colorama termcolor
 This tool is intended for educational purposes only. Unauthorized use of this tool to compromise or damage systems is illegal and unethical. The developers are not responsible for any misuse or damage caused by this tool.
 
 **Repository Views** ![Views](https://profile-counter.glitch.me/Brutexmlrpc/count.svg)
+
+<!-- Links -->
+[requirements.txt]: ./requirements.txt
