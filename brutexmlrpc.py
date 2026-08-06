@@ -589,9 +589,6 @@ async def main():
                 )
                 return
 
-        # Get the number of threads to use from the user
-        threads = int(input(f"{Fore.YELLOW}Enter the number of threads to use: "))
-
         # Ask the user if they want to use system.multicall
         multicall_choice = input(
             f"{Fore.YELLOW}Do you want to use system.multicall? (y/n): "
@@ -605,6 +602,9 @@ async def main():
                 logging.info("Analyzing response times")
                 await analyze_response_times([response_time])
         else:
+            # Get the number of threads to use from the user only if not using multicall
+            threads = int(input(f"{Fore.YELLOW}Enter the number of threads to use for brute force: "))
+
             await start_bruteforce_async(url + "/xmlrpc.php", users, passwords, threads)
 
 # ==================================================================================================
