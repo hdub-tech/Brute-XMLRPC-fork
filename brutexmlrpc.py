@@ -204,19 +204,26 @@ async def check_xmlrpc_available(url, session, retries=3, delay=2):
 # ==================================================================================================
 
 async def get_wp_users(url, session):
+    """Using the REST API, detect usernames which have made a public post in WordPress instance"""
     headers = generate_random_headers(url)
-    api_url = url + "/wp-json/wp/v2/users"
-    try:
-        async with session.get(api_url, headers=headers, ssl=False) as response:
-            if response.status == 200:
-                users = [user["slug"] for user in await response.json()]
-                return users
-            else:
-                logging.error(f"Failed to fetch users. Status code: {response.status}")
-                return []
-    except aiohttp.ClientError as e:
-        logging.error(f"Error fetching users: {e}")
-        return []
+    rest_api_url = await detect_rest_api_route(url, session)
+    if rest_api_url is None:
+        logging.error('No REST API detected. Cannot fetch users')
+    else:
+        users_api_url = rest_api_url + "wp/v2/users"
+        try:
+            async with session.get(users_api_url, headers=headers, ssl=False) as response:
+                if response.status == 200:
+                    users = [user["slug"] for user in await response.json()]
+                    return users
+
+            logging.error(
+                "Failed to fetch users. Version likely <4.7, before users endpoint was added."
+                "\nStatus code: %s", response.status
+                )
+        except aiohttp.ClientError as e:
+            logging.error("Error fetching users: %s", e)
+    return []
 
 # ==================================================================================================
 # ==================================================================================================
@@ -629,14 +636,17 @@ async def main():
             f"{Fore.YELLOW}Do you want to list users from WP JSON API? (y/n): "
         ).lower()
 
+        users = []
+        rest_api_used = False
         if use_wp_api == "y":
             users = await get_wp_users(url, session)
             if users:
+                rest_api_used = True
                 print(f"{Fore.CYAN}Found users: {', '.join(users)}")
             else:
                 print(f"{Fore.RED}No users found from WP API.")
-                return
-        else:
+
+        if len(users) == 0:
             # Ask the user if they want to provide a username file or enter manually
             username_choice = input(
                 f"{Fore.YELLOW}Do you want to provide a username file or enter manually? (f/m): "
