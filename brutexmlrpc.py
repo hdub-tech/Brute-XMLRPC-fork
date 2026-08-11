@@ -425,7 +425,10 @@ async def brute_force_task(
         url, username, password, session
     )
     total_attempts[0] += 1
-    if response_text and "Dashboard" in response_text:
+    # Not sure if Dashboard actually is a valid match, but trusting pre-existing
+    # check which might work with older versions
+    good_matches = ['isAdmin', 'Dashboard']
+    if any(match in response_text for match in good_matches):
         print(f"\n{Fore.GREEN}Login successful with {username}:{password}")
         await save_successful_login(username, password)
         return True
