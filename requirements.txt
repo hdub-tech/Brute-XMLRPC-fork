@@ -3,4 +3,3 @@ colorama
 termcolor
 aiohttp
 aiohttp_socks
-beautifulsoup4
