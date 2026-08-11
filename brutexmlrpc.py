@@ -1,23 +1,19 @@
-import xml.etree.ElementTree as ET
 import asyncio
-import aiohttp
-import time
+import json
+import logging
 import os
 import random
-import logging
-import json
-import subprocess
-from concurrent.futures import ThreadPoolExecutor
+import time
+from urllib.parse import urlparse
+import xml.etree.ElementTree as ET
+
+import aiohttp
+from aiohttp_socks import ProxyConnector, ProxyType
 from colorama import Fore, init
 from termcolor import colored
 import urllib3
-from urllib.parse import urljoin, urlparse
-from bs4 import BeautifulSoup
+
 import banner
-from aiohttp_socks import (
-    ProxyConnector,
-    ProxyType,
-)  # Import the ProxyConnector and ProxyType
 from header_data import user_agents, referer_domains
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -451,7 +447,8 @@ async def brute_force_task(
 # ==================================================================================================
 # ==================================================================================================
 
-async def start_bruteforce_async(url, usernames, passwords, threads, use_tor=False):
+async def start_bruteforce_async(url, usernames, passwords, use_tor=False):
+    """Build the asyncio task list of brute_force_tasks and then run them"""
     # Initialize start time and total attempts
     start_time = [time.time()]  # List to hold the start time for tracking elapsed time
     total_attempts = [0]  # List to hold the total number of attempts made
@@ -709,10 +706,12 @@ async def main():
                         await analyze_response_times([response_time])
                     return
 
-        # Get the number of threads to use from the user only if not using multicall
-        threads = int(input(f"{Fore.YELLOW}Enter the number of threads to use for brute force: "))
-
-        await start_bruteforce_async(url + "/xmlrpc.php", users, passwords, threads)
+        # Always confirm user wants to brute force - it's noisy
+        brute_force_choice = input(
+            f"{Fore.YELLOW}Do you want to try brute force method? (y/n): "
+        ).lower()
+        if brute_force_choice == "y":
+            await start_bruteforce_async(url + "/xmlrpc.php", users, passwords)
 
 # ==================================================================================================
 # ==================================================================================================
