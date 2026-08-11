@@ -249,8 +249,12 @@ async def brute_force_login(url, username, password, session):
             response_text = await response.text()
             return response_text, response_time, response.status
     except aiohttp.ClientError as e:
-        logging.error(f"Error during login attempt for {username}:{password}: {e}")
-        return None, None, None
+        logging.error("ClientError during login attempt for %s:%s: %s", username, password, e)
+        raise e
+    except asyncio.TimeoutError as te:
+        logging.error("TimeoutError during login attempt for %s:%s: %s", username, password, e)
+        raise te
+
 
 # ==================================================================================================
 # ==================================================================================================
@@ -416,7 +420,7 @@ async def brute_force_task(url, username, password, session):
     # Not sure if Dashboard actually is a valid match, but trusting pre-existing
     # check which might work with older versions
     good_matches = ['isAdmin', 'Dashboard']
-    if any(match in response_text for match in good_matches):
+    if any(response_text is not None and match in response_text for match in good_matches):
         print(f"\n{Fore.GREEN}Login successful with {username}:{password}")
         await save_successful_login(username, password)
         return True
