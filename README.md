@@ -8,7 +8,7 @@
 
 ## Features
 - **`system.multicall`**: Send 1 request with multiple username/password combinations to `/xmlrpc.php` using `system.multicall` (WordPress versions <=4.3 only) OR
-- **Brute Force**: Send 1 request per username/password combination to `/xmlrpc.php` using `wp.getUsersBlogs` concurrently (WordPress versions >=1.5.0)
+- **Brute Force**: Send 1 request per username/password combination to `/xmlrpc.php` using `wp.getUsersBlogs` concurrently (WordPress versions >=1.5.0). This is done in batches, where each batch is randomly sized (between 900-1100) and with a random sleep (15-30 seconds) after each batch (except the last one).
 - **IP Spoofing**: Generate random IP addresses for headers like `X-Forwarded-For` and `X-Real-IP` to enhance anonymity.
 - **Custom Headers**: Use a variety of headers to mimic real-world browser requests.
 - **User Enumeration**: Retrieve user information from the WordPress REST API (WordPress versions >=4.4 only).
