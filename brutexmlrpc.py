@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
@@ -617,6 +618,27 @@ async def check_for_waf(url, session, use_tor=False):
 # ==================================================================================================
 # ==================================================================================================
 
+def detect_xml_chars(data_list: list):
+    """
+    Given a list, separate out entries which have xml characters: < > & " '
+    and return a List of good entries and a Set of bad entries.
+    Due to the use of Sets during processing, all entries are de-duped
+    """
+    pattern = re.compile(r'[<>&"\']')
+    good_entries, bad_entries = set(), set()  # Using set to take advantage of dedupe
+    for item in data_list:
+        if pattern.findall(item):
+            bad_entries.add(item)
+        else:
+            good_entries.add(item)
+
+    # Using a list cuz we want ordered during processing
+    return list(good_entries), bad_entries
+
+# ==================================================================================================
+# ==================================================================================================
+# ==================================================================================================
+
 async def main():
     # Print the banner
     banner.print_banner()
@@ -676,11 +698,15 @@ async def main():
                 f"{Fore.YELLOW}Do you want to provide a username file or enter manually? (f/m): "
             ).lower()
             if username_choice == "f":
-                username_file = input(
-                    f"{Fore.YELLOW}Enter the path to the username file: "
-                )
-                with open(username_file, "r") as file:
-                    users = [line.strip() for line in file.readlines()]
+                username_file = input(f"{Fore.YELLOW}Enter the path to the username file: ")
+                if os.path.exists(username_file):
+                    with open(username_file, "r", encoding='utf-8') as file:
+                        users = [line.strip() for line in file.readlines()]
+                        users, bad_users = detect_xml_chars(users)
+                        if bad_users:
+                            print(
+                                f"{Fore.RED}The following users have xml chars and will "
+                                f"be skipped: {bad_users}")
             else:
                 users = [input(f"{Fore.YELLOW}Enter a username: ")]
 
@@ -688,19 +714,24 @@ async def main():
         password_choice = input(
             f"{Fore.YELLOW}Do you want to provide a password file or use default (wppass.txt)? (f/d): "
         ).lower()
+
+        password_file = 'wppass.txt'
         if password_choice == "f":
             password_file = input(f"{Fore.YELLOW}Enter the path to the password file: ")
-            with open(password_file, "r") as file:
+
+        passwords = []
+        if os.path.exists(password_file):
+            with open(password_file, "r", encoding='utf-8') as file:
                 passwords = [line.strip() for line in file.readlines()]
-        else:
-            if os.path.exists("wppass.txt"):
-                with open("wppass.txt", "r") as file:
-                    passwords = [line.strip() for line in file.readlines()]
-            else:
+
+            passwords, bad_passwords = detect_xml_chars(passwords)
+            if bad_passwords:
                 print(
-                    f"{Fore.RED}Default password file (wppass.txt) not found. Exiting..."
-                )
-                return
+                    f"{Fore.RED}The following passwords have xml chars and will "
+                    f"be skipped: {bad_passwords}")
+        else:
+            print(f"{Fore.RED}Password file {password_file} not found. Exiting...")
+            return
 
         # Ask the user if they want to use system.multicall, if we haven't already
         # detected and used the REST API. Unrelated to the REST API itself, multicall
