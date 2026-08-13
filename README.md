@@ -7,8 +7,12 @@
 **Brute-XMLRPC** is a Python-based tool designed to perform brute force attacks on WordPress sites through the `xmlrpc.php` endpoint. It can also enumerate users via the WordPress REST API (on versions >=4.4) to enhance the attack surface.
 
 ## Features
-- **`system.multicall`**: Send 1 request with multiple username/password combinations to `/xmlrpc.php` using `system.multicall` (WordPress versions <=4.3 only) OR
-- **Brute Force**: Send 1 request per username/password combination to `/xmlrpc.php` using `wp.getUsersBlogs` concurrently (WordPress versions >=1.5.0). This is done in batches, where each batch is randomly sized (between 900-1100) and with a random sleep (15-30 seconds) after each batch (except the last one).
+
+_**Two different modes**_
+- **`system.multicall` mode**: Send 1 POST request with a batch of multiple username/password combinations to `/xmlrpc.php` using `system.multicall` (WordPress versions <=4.3 only). This is done sequentially in batches, where each batch is randomly sized (between 1300-1500) and with a random sleep (15-30 seconds) after each POST (except the last one).
+- **Brute Force mode**: Send 1 request per username/password combination to `/xmlrpc.php` using `wp.getUsersBlogs` concurrently (WordPress versions >=1.5.0). This is done in batches, where each batch is randomly sized (between 900-1100) and with a random sleep (15-30 seconds) after each batch (except the last one).
+
+_**Additional features**_
 - **IP Spoofing**: Generate random IP addresses for headers like `X-Forwarded-For` and `X-Real-IP` to enhance anonymity.
 - **Custom Headers**: Use a variety of headers to mimic real-world browser requests.
 - **User Enumeration**: Retrieve user information from the WordPress REST API (WordPress versions >=4.4 only).
