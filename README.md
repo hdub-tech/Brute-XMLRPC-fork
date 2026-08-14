@@ -61,7 +61,7 @@ _**Additional features**_
 ## Usage
 1. Run the script:
     ```bash
-    python brutecxmlrpc.py
+    python brutexmlrpc.py
     ```
 
 2. Follow the prompts to:
