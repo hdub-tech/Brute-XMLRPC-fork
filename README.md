@@ -10,7 +10,18 @@
 
 _**Two different modes**_
 - **`system.multicall` mode**: Send 1 POST request with a batch of multiple username/password combinations to `/xmlrpc.php` using `system.multicall` (WordPress versions <=4.3 only). This is done sequentially in batches, where each batch is randomly sized (between 1300-1500) and with a random sleep (15-30 seconds) after each POST (except the last one).
+    <details><summary><i>Expand for picture!</i></summary>
+
+    ![Brute XMLRPC - multicall mode - WordPress 4.3](./images/brute-xmlrpc-multicall.png "Brute XMLRPC - multicall mode - WordPress 4.3")
+
+    </details>
+
 - **Brute Force mode**: Send 1 request per username/password combination to `/xmlrpc.php` using `wp.getUsersBlogs` concurrently (WordPress versions >=1.5.0). This is done in batches, where each batch is randomly sized (between 900-1100) and with a random sleep (15-30 seconds) after each batch (except the last one).
+    <details><summary><i>Expand for picture!</i></summary>
+
+    ![Brute XMLRPC - brute force mode - WordPress 7.0](./images/brute-xmlrpc-brute.png "Brute XMLRPC - brute force mode - WordPress 7.0")
+
+    </details>
 
 _**Additional features**_
 - **IP Spoofing**: Generate random IP addresses for headers like `X-Forwarded-For` and `X-Real-IP` to enhance anonymity.
