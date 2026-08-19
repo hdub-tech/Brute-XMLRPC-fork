@@ -1,53 +1,61 @@
 ## Author
-**Author**: Trix Cyrus  
-**Copyright**: © 2025 Trixsec Org   
-**Maintained**: Yes 
+**Author**: Trix Cyrus
+**Copyright**: © 2025 Trixsec Org
+**Maintained**: Yes
 
 ## Overview
-**Brute-XMLRPC** is a Python-based tool designed to perform brute force attacks on WordPress sites through the `xmlrpc.php` endpoint. It can also enumerate users via the WordPress JSON API to enhance the attack surface.
+**Brute-XMLRPC** is a Python-based tool designed to perform brute force attacks on WordPress sites through the `xmlrpc.php` endpoint. It can also enumerate users via the WordPress REST API (on versions >=4.4) to enhance the attack surface.
 
 ## Features
-- **Multi-threaded Brute Force**: Perform brute force attacks using multiple threads for efficiency.
+
+_**Two different modes**_
+- **`system.multicall` mode**: Send 1 POST request with a batch of multiple username/password combinations to `/xmlrpc.php` using `system.multicall` (WordPress versions <=4.3 only). This is done sequentially in batches, where each batch is randomly sized (between 1300-1500) and with a random sleep (15-30 seconds) after each POST (except the last one).
+    <details><summary><i>Expand for picture!</i></summary>
+
+    ![Brute XMLRPC - multicall mode - WordPress 4.3](./images/brute-xmlrpc-multicall.png "Brute XMLRPC - multicall mode - WordPress 4.3")
+
+    </details>
+
+- **Brute Force mode**: Send 1 request per username/password combination to `/xmlrpc.php` using `wp.getUsersBlogs` concurrently (WordPress versions >=1.5.0). This is done in batches, where each batch is randomly sized (between 900-1100) and with a random sleep (15-30 seconds) after each batch (except the last one).
+    <details><summary><i>Expand for picture!</i></summary>
+
+    ![Brute XMLRPC - brute force mode - WordPress 7.0](./images/brute-xmlrpc-brute.png "Brute XMLRPC - brute force mode - WordPress 7.0")
+
+    </details>
+
+_**Additional features**_
 - **IP Spoofing**: Generate random IP addresses for headers like `X-Forwarded-For` and `X-Real-IP` to enhance anonymity.
 - **Custom Headers**: Use a variety of headers to mimic real-world browser requests.
-- **User Enumeration**: Retrieve user information from the WordPress JSON API.
+- **User Enumeration**: Retrieve user information from the WordPress REST API (WordPress versions >=4.4 only).
 - **Interactive Input**: Easy-to-use prompts for user input and configuration.
 - **Progress Display**: Real-time display of brute force attempts and progress.
+- **WordPress 4.4+ detection**: Detect if version 4.4+ (based on presence of REST API) to intelligently allow version based features.
 
-## **Key Changes and Improvements:**  
+## **Key Changes and Improvements:**
 
-1. **Proxy Handling with `aiohttp-socks`:**  
-   - Integrated `aiohttp-socks` for SOCKS5 proxy support, ensuring compatibility with Tor.  
-   - Replaced direct proxy arguments with `ProxyConnector` for streamlined connection management.  
+1. **Proxy Handling with `aiohttp-socks`:**
+   - Integrated `aiohttp-socks` for SOCKS5 proxy support, ensuring compatibility with Tor.
+   - Replaced direct proxy arguments with `ProxyConnector` for streamlined connection management.
 
-2. **Enhanced Header and User-Agent Spoofing:**  
-   - Expanded `user_agents` list with mobile browsers, old browsers, and bots.  
-   - Broadened `referer_domains` and added randomized `Accept-Language`, `Accept-Encoding`, `Forwarded`, `DNT`, `Origin`, and `Cache-Control` headers for increased variety.  
+2. **Enhanced Header and User-Agent Spoofing:**
+   - Expanded `user_agents` list with mobile browsers, old browsers, and bots.
+   - Broadened `referer_domains` and added randomized `Accept-Language`, `Accept-Encoding`, `Forwarded`, `DNT`, `Origin`, and `Cache-Control` headers for increased variety.
 
-3. **Payload Variation in `check_xmlrpc_available`:**  
-   - Introduced random payloads (`system.getCapabilities`, `system.methodHelp`, etc.) for more robust testing.  
+3. **Payload Variation in `check_xmlrpc_available`:**
+   - Introduced random payloads (`system.getCapabilities`, `system.methodHelp`, etc.) for more robust testing.
 
-4. **Retry Logic and Rate Limiting:**  
-   - Added retry mechanism with delays and handling of `429` responses using `Retry-After` header.  
+4. **Retry Logic and Rate Limiting:**
+   - Added retry mechanism with delays and handling of `429` responses using `Retry-After` header.
 
-5. **WAF Detection:**  
-   - Added `check_for_waf` to identify 403 responses indicating a WAF and log detections in `WAF_DETECTED_LOG`.  
+5. **WAF Detection:**
+   - Added `check_for_waf` to identify 403 responses indicating a WAF and log detections in `WAF_DETECTED_LOG`.
 
-6. **Deprecated Method Removal:**  
-   - Replaced `SocksConnector.create` with `ProxyConnector` for modern and non-deprecated proxy handling.  
+6. **Deprecated Method Removal:**
+   - Replaced `SocksConnector.create` with `ProxyConnector` for modern and non-deprecated proxy handling.
 
 ## Requirements
-- Python 3.x
-- Required Python packages:
-  - `requests`
-  - `colorama`
-  - `termcolor`
-  - `concurrent.futures`
-
-You can install the required packages using the following command:
-```bash
-pip install requests colorama termcolor
-```
+- Python >= 3.10
+- Required Python packages are in [requirements.txt]
 
 ## Installation
 1. Clone the repository:
@@ -56,21 +64,29 @@ pip install requests colorama termcolor
     cd Brute-XMLRPC
     ```
 
+2. Install required packages:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
 ## Usage
 1. Run the script:
     ```bash
-    python brutecxmlrpc.py
+    python brutexmlrpc.py
     ```
 
 2. Follow the prompts to:
    - Enter the target WordPress site URL.
-   - Check for `xmlrpc.php` availability.
-   - Choose to enumerate users via the WordPress JSON API.
-   - Provide usernames and passwords manually or via files.
-   - Set the number of threads for the brute force attack.
-
+   - Optionally use Tor.
+   - Choose to enumerate users via the WordPress REST API (if >=4.4, auto-detected).
+   - Provide single username manually or a filename containing users.
+   - Provide a filename containing passwords or use a default password file.
+   - Optionally use `system.multicall` method (if <=4.3, auto-detected)
 
 ## Disclaimer
 This tool is intended for educational purposes only. Unauthorized use of this tool to compromise or damage systems is illegal and unethical. The developers are not responsible for any misuse or damage caused by this tool.
 
 **Repository Views** ![Views](https://profile-counter.glitch.me/Brutexmlrpc/count.svg)
+
+<!-- Links -->
+[requirements.txt]: ./requirements.txt
